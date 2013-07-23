@@ -1,6 +1,8 @@
 Nmodbus
 =======
 
+A fork of Nmodbus http://code.google.com/p/nmodbus/ with the following stuff added:
+
 Modbus implementation for .net with some added features
 
 The following things were added:
