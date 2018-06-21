@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Globalization;
 using System.IO;
 using System.Linq;
@@ -10,6 +10,7 @@ using log4net;
 using Modbus.IO;
 using Modbus.Message;
 using Unme.Common;
+using System.Diagnostics;
 
 namespace Modbus.Device
 {
@@ -17,6 +18,13 @@ namespace Modbus.Device
 	{
 		private readonly ILog _log = LogManager.GetLogger(Assembly.GetCallingAssembly(),
 			String.Format(CultureInfo.InvariantCulture, "{0}.Instance{1}", typeof(ModbusMasterTcpConnection).FullName, Interlocked.Increment(ref _instanceCounter)));
+
+
+
+        string sSource = "Modbus Driver";
+        string sLog = "Application";
+        string Event = "none";
+
 
 		private readonly TcpClient _client;		
 		private readonly string _endPoint;
@@ -136,36 +144,54 @@ namespace Modbus.Device
 		/// </summary>
 		internal void CatchExceptionAndRemoveMasterEndPoint(Action action, string endPoint)
 		{
-			if (action == null)
-				throw new ArgumentNullException("action");
-			if (endPoint == null)
-				throw new ArgumentNullException("endPoint");
-			if (endPoint.IsNullOrEmpty())
-				throw new ArgumentException("Argument endPoint cannot be empty.");
+            try
+            {
+                if (action == null)
+                    throw new ArgumentNullException("action");
+                if (endPoint == null)
+                    throw new ArgumentNullException("endPoint");
+                if (endPoint.IsNullOrEmpty())
+                    throw new ArgumentException("Argument endPoint cannot be empty.");
 
-			try
-			{
-				action.Invoke();
-			}
-			catch (IOException ioe)
-			{
-				_log.DebugFormat("IOException encountered in ReadHeaderCompleted - {0}", ioe.Message);
-				ModbusMasterTcpConnectionClosed.Raise(this, new TcpConnectionEventArgs(EndPoint));
+                try
+                {
+                    action.Invoke();
+                }
+                catch (IOException ioe)
+                {
+                    _log.DebugFormat("IOException encountered in ReadHeaderCompleted - {0}", ioe.Message);
+                    ModbusMasterTcpConnectionClosed.Raise(this, new TcpConnectionEventArgs(EndPoint));
 
-				SocketException socketException = ioe.InnerException as SocketException;
-				if (socketException != null && socketException.ErrorCode == Modbus.ConnectionResetByPeer)
-				{
-					_log.Debug("Socket Exception ConnectionResetByPeer, Master closed connection.");
-					return;
-				}
+                    SocketException socketException = ioe.InnerException as SocketException;
+                    if (socketException != null && socketException.ErrorCode == Modbus.ConnectionResetByPeer)
+                    {
+                        _log.Debug("Socket Exception ConnectionResetByPeer, Master closed connection.");
+                        return;
+                    }
 
-				throw;
-			}
-			catch (Exception e)
-			{
-				_log.Error("Unexpected exception encountered", e);
-				throw;
-			}
-		}
+                    Console.WriteLine("Caught some unknown exception but not throwing it: " + ioe.Message);
+                    throw;
+                }
+                catch (ArgumentException e)
+                {
+                    //We don't have handle this but we don't want to crash
+                    if (e.Message.Contains("Unsupported function code"))
+                    {
+                        Console.WriteLine(e.Message);
+                    }
+                }
+                catch (Exception e)
+                {
+                    _log.Error("Unexpected exception encountered", e);
+                    Console.WriteLine("Caught some unknown exception but not throwing it: " + e.Message);
+                    throw;
+                }
+            }
+            catch (Exception err)
+            {
+
+                Console.WriteLine("Caught Some Exception not thowing " + err.Message);
+            }
+	}
 	}
 }
