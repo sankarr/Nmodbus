@@ -20,16 +20,18 @@ namespace Modbus.Device
 
         static private Dictionary<byte, Data.DataStore> m_internalMap;
 
-        
-        
+
+        /// <summary>
+        /// This will turn on debugging
+        /// </summary>
+        public bool Debug { get; set; }
 
         
-        private ModbusSerialSlave(byte unitId, ModbusTransport transport)
+		private ModbusSerialSlave(byte unitId, ModbusTransport transport)
 			: base(unitId, transport)
 		{
+            Debug = false;
 		}
-
-
 
 		private ModbusSerialTransport SerialTransport
 		{
@@ -76,7 +78,7 @@ namespace Modbus.Device
 			return CreateRtu(unitId, new SerialPortAdapter(serialPort));
 		}
 
-        /// <summary>
+		/// <summary>
         /// This to create an rtu for multiple data store and multiple modbus IDs on a single port
         /// </summary>
         /// <param name="_internalMap"></param>
@@ -115,7 +117,7 @@ namespace Modbus.Device
 		/// <summary>
 		/// Start slave listening for requests.
 		/// </summary>
-		public  override void Listen()
+		public override void Listen()
 		{
             // This external Variable can stop this process
             stop = false;
@@ -130,28 +132,48 @@ namespace Modbus.Device
 						byte[] frame = SerialTransport.ReadRequest();
 						IModbusMessage request = ModbusMessageFactory.CreateModbusRequest(frame);
 
+
                         // here for debugging purposes writes what port is being read
-    //                    using (StreamWriter outHandle = new StreamWriter("Output.txt", true))
-    //                    {
+                        if (Debug == true)
+                        {
+                            using (StreamWriter outHandle = new StreamWriter("Output.txt", true))
+                            {
 
-    //                        if (request.FunctionCode == Modbus.ReadHoldingRegisters)
-    //                        {
-    //                            outHandle.WriteLine("{0} Reading Port {1} functioncode {2} startadress {3} points {4}", DateTime.Now.ToString(), request.SlaveAddress, request.FunctionCode,
-    //                                ((ReadHoldingInputRegistersRequest)request).StartAddress, ((ReadHoldingInputRegistersRequest)request).NumberOfPoints);
+                                if (request.FunctionCode == Modbus.ReadHoldingRegisters)
+                                {
+                                    outHandle.WriteLine("{0} Reading Port {1} functioncode {2} startadress {3} points {4}", DateTime.Now.ToString(), request.SlaveAddress, request.FunctionCode,
+                                        ((ReadHoldingInputRegistersRequest)request).StartAddress, ((ReadHoldingInputRegistersRequest)request).NumberOfPoints);
 
-    //                        }
-    //                        else if (request.FunctionCode == Modbus.ReadInputRegisters)
-    //                        {
-    //                            outHandle.WriteLine("{0} Reading Port {1} functioncode {2} startadress {3} points {4}", DateTime.Now.ToString(), request.SlaveAddress, request.FunctionCode,
-    //((ReadHoldingInputRegistersRequest)request).StartAddress, ((ReadHoldingInputRegistersRequest)request).NumberOfPoints);
-    //                        }
-    //                        //response = ReadRegisters((ReadHoldingInputRegistersRequest) request, DataStore, DataStore.HoldingRegisters);
-    //                //break;
-    //            //case Modbus.ReadInputRegisters:
+                                }
+                                else if (request.FunctionCode == Modbus.ReadInputRegisters)
+                                {
+                                    outHandle.WriteLine("{0} Reading Port {1} functioncode {2} startadress {3} points {4}", DateTime.Now.ToString(), request.SlaveAddress, request.FunctionCode,
+        ((ReadHoldingInputRegistersRequest)request).StartAddress, ((ReadHoldingInputRegistersRequest)request).NumberOfPoints);
+                                }
+                                else if (request.FunctionCode == Modbus.WriteMultipleRegisters)
+                                {
+                                    outHandle.WriteLine("{0} Write Port {1} functioncode {2} startadress {3} points {4}", DateTime.Now.ToString(), request.SlaveAddress, request.FunctionCode,
+        ((WriteMultipleRegistersRequest)request).StartAddress, ((WriteMultipleRegistersRequest)request).NumberOfPoints);
+                                    var items = ((WriteMultipleRegistersRequest)request).Data;
+                                    foreach (var item  in items)
+                                    {
+                                        outHandle.WriteLine(item);
+                                        
+                                    }
+                                }
+                                else if (request.FunctionCode == Modbus.WriteMultipleRegisters)
+                                {
+                                    outHandle.WriteLine("{0} Write Port {1} functioncode {2} startadress {3} data {4}", DateTime.Now.ToString(), request.SlaveAddress, request.FunctionCode,
+        ((WriteSingleRegisterRequestResponse)request).StartAddress, ((WriteSingleRegisterRequestResponse)request).Data);
+                                }
+                                //response = ReadRegisters((ReadHoldingInputRegistersRequest) request, DataStore, DataStore.HoldingRegisters);
+                                //break;
+                                //case Modbus.ReadInputRegisters:
 
 
-    //                        //outHandle.WriteLine("{0} Reading Port {1}", DateTime.Now.ToString(), request.SlaveAddress, request.FunctionCode );
-    //                    }
+                                //outHandle.WriteLine("{0} Reading Port {1}", DateTime.Now.ToString(), request.SlaveAddress, request.FunctionCode );
+                            }
+                        }
 
 						if (SerialTransport.CheckFrame && !SerialTransport.ChecksumsMatch(request, frame))
 						{
@@ -172,11 +194,11 @@ namespace Modbus.Device
                         }
                         else
                         {
-                            if (request.SlaveAddress != UnitId)
-                            {
-                                _logger.DebugFormat("NModbus Slave {0} ignoring request intended for NModbus Slave {1}", UnitId, request.SlaveAddress);
-                                continue;
-                            }
+						if (request.SlaveAddress != UnitId)
+						{
+							_logger.DebugFormat("NModbus Slave {0} ignoring request intended for NModbus Slave {1}", UnitId, request.SlaveAddress);
+							continue;
+						}
 
                         }
 
@@ -189,11 +211,17 @@ namespace Modbus.Device
 
                         
                         
-                        IModbusMessage response = ApplyRequest(request);
+						IModbusMessage response = ApplyRequest(request);
 
 						// write response
 						SerialTransport.Write(response);
 					}
+                    catch (NotImplementedException ni)
+                    {
+                        SerialTransport.DiscardInBuffer();
+                        Console.WriteLine(ni.Message);
+                        Console.WriteLine("Just ignoring for time being");
+                    }
 					catch (IOException ioe)
 					{
 						_logger.ErrorFormat("IO Exception encountered while listening for requests - {0}", ioe.Message);
@@ -209,9 +237,14 @@ namespace Modbus.Device
 				}
 				catch (InvalidOperationException)
 				{
+                    // throw;
 					// when the underlying transport is disposed
-					break;
+                    Console.WriteLine("Invalid Operation Exception not stopping");
 				}
+                catch (Exception e)
+                {
+                    Console.WriteLine("Invalid Operation Exception not stopping: " + e.Message);
+                }
 			}
 		}
 
@@ -228,11 +261,11 @@ namespace Modbus.Device
                 if (key == keyToCheck)
                 {
                     return true;
-                }
-            }
+				}
+			}
 
             return false;
-        }
+		}
 
 
         
